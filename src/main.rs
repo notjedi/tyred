@@ -21,9 +21,9 @@ fn main() -> ! {
 
     let mut usb_dev = UsbDeviceBuilder::new(&usb_bus, UsbVidPid(0x16c0, 0x27dd))
         .strings(&[StringDescriptors::default()
-            .manufacturer("Fake company")
+            .manufacturer("Indiska")
             .product("Serial port")
-            .serial_number("TEST")])
+            .serial_number("tyred")])
         .unwrap()
         .device_class(USB_CLASS_CDC)
         .max_packet_size_0(64) // (makes control transfers 8x faster)
