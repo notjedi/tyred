@@ -1,1 +1,5 @@
 /target
+*.uf2
+*.bin
+.idea/
+.DS_Store
