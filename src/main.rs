@@ -6,6 +6,7 @@ use panic_halt as _;
 use cortex_m_rt::entry;
 use embassy_nrf::config::Config;
 use embassy_nrf::gpio::{Level, Output, OutputDrive};
+use embassy_time::{Duration, Timer};
 
 #[entry]
 fn main() -> ! {
@@ -16,9 +17,9 @@ fn main() -> ! {
 
     loop {
         led.set_high();
-        cortex_m::asm::delay(64_000_000 * 2);
+        embassy_time::block_for(Duration::from_secs(2));
         led.set_low();
-        cortex_m::asm::delay(64_000_000 * 2);
+        embassy_time::block_for(Duration::from_secs(2));
     }
 
     // let periph = nrf52840_hal::pac::Peripherals::take().unwrap();
