@@ -3,24 +3,63 @@
 
 use panic_halt as _;
 
-use cortex_m_rt::entry;
-use embassy_nrf::config::Config;
-use embassy_nrf::gpio::{Level, Output, OutputDrive};
-use embassy_time::{Duration, Timer};
+use embassy_executor::Spawner;
+use embassy_futures::join::join;
+use embassy_nrf::{bind_interrupts, peripherals, usb};
+use embassy_nrf::config::{Config, HfclkSource};
+use embassy_nrf::usb::Driver;
+use embassy_nrf::usb::vbus_detect::HardwareVbusDetect;
+use embassy_usb::Builder;
+use embassy_usb::class::cdc_acm::{CdcAcmClass, State};
 
-#[entry]
-fn main() -> ! {
-    let config = Config::default();
-    let nrf = embassy_nrf::init(config);
+bind_interrupts!(struct Irqs {
+    USBD => usb::InterruptHandler<peripherals::USBD>;
+    CLOCK_POWER => usb::vbus_detect::InterruptHandler;
+});
 
-    let mut led = Output::new(nrf.P0_15, Level::Low, OutputDrive::Standard);
+#[embassy_executor::main]
+async fn main(_spawner: Spawner) {
+    /*
+    we can also do the following:
+      use embassy_nrf::pac;
 
-    loop {
-        led.set_high();
-        embassy_time::block_for(Duration::from_secs(2));
-        led.set_low();
-        embassy_time::block_for(Duration::from_secs(2));
-    }
+      pac::CLOCK.tasks_hfclkstart().write_value(1);
+      while pac::CLOCK.events_hfclkstarted().read() != 1 {}
+       */
+    let mut config = Config::default();
+    config.hfclk_source = HfclkSource::ExternalXtal;
+    let nn = embassy_nrf::init(config);
+
+    let driver = Driver::new(nn.USBD, Irqs, HardwareVbusDetect::new(Irqs));
+
+    let mut usb_config = embassy_usb::Config::new(0xc0de, 0xcafe);
+    usb_config.manufacturer = Some("Indiska");
+    usb_config.product = Some("Getting started w Embassy");
+    usb_config.serial_number = Some("tyred");
+    usb_config.max_power = 100;
+    usb_config.max_packet_size_0 = 64;
+
+    let mut config_descriptor_buf = [0; 256];
+    let mut bos_descriptor_buf = [0; 256];
+    let mut msos_descriptor_buf = [0; 256];
+    let mut control_buf = [0; 256];
+
+    let max_packet_size = 64;
+    let mut state = State::new();
+    let mut builder = Builder::new(
+        driver,
+        usb_config,
+        &mut config_descriptor_buf,
+        &mut bos_descriptor_buf,
+        &mut msos_descriptor_buf,
+        &mut control_buf
+    );
+    let mut cdc_acm = CdcAcmClass::new(&mut builder, &mut state, max_packet_size);
+
+    let mut usb = builder.build();
+    let usb_fut = usb.run();
+
+    join(usb_fut, cdc_acm.wait_connection()).await;
 
     // let periph = nrf52840_hal::pac::Peripherals::take().unwrap();
     // let clocks = Clocks::new(periph.CLOCK);
